@@ -1,11 +1,13 @@
-#include "startwindow.h"
+#include "uimanager.h"
 
 #include <QApplication>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    StartWindow w;
-    w.show();
+
+    UiManager w;
+    w.showDefaultWindow();
+
     return a.exec();
 }

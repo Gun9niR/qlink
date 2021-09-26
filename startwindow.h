@@ -1,21 +1,28 @@
 #ifndef STARTWINDOW_H
 #define STARTWINDOW_H
 
-#include <QWidget>
+#include "types.h"
+#include "uiconfig.h"
 
-QT_BEGIN_NAMESPACE
-namespace Ui { class StartWindow; }
-QT_END_NAMESPACE
-
+// The window that gets displayed right after program starts.
 class StartWindow : public QWidget
 {
     Q_OBJECT
+private:
+    const unique_ptr<UiConfig> &config;
 
 public:
-    StartWindow(QWidget *parent = nullptr);
-    ~StartWindow();
+    StartWindow(const unique_ptr<UiConfig> &config, QWidget *parent = nullptr);
+    void initLayout();
 
-private:
-    Ui::StartWindow *ui;
+private slots:
+    void onClickSinglePlayer();
+    void onClickMultiPlayer();
+    void onClickLoad();
+    void onClickQuit();
+
+signals:
+    void sendStartGame(QWidget *const sender, const GameMode mode);
+    void sendLoadGame(QWidget *const sender);
 };
 #endif // STARTWINDOW_H
