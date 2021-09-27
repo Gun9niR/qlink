@@ -25,6 +25,7 @@ class GameWindow: public QWidget
     Q_OBJECT
 
     friend class Player;
+    friend class UnitTest;
 
 private:
     // Number of groups all the blocks fall into. Blocks of the same group can
@@ -204,6 +205,9 @@ private:
     // Indicates whether the hint item has been activated.
     bool hint;
 
+    // Highlighted blocks will be generated near the postion of <hintFor>.
+    WhichPlayer hintFor;
+
     // The number of milliseconds remaining before hint item expires.
     int hintTimeRemaining;
 
@@ -246,20 +250,22 @@ private:
     // Spawn an item of random type at the center of random unoccupied block.
     void spawnItem();
 
-    // Invoked when player has geometrically 'touched' the item in <block>,
-    // remove this item visually and logically.
-    void consumeItem(Block *const block);
+    // Invoked when player <which> has geometrically 'touched' the item in
+    // <block>, remove this item visually and logically.
+    void consumeItem(const WhichPlayer which, Block *const block);
 
     // Shuffle all the blocks and items on the map. If hint is enabled, a new
     // pair of hint will be generated.
     void shuffle();
 
     // Enable hint for <t> seconds, during which pairs of blocks will constantly
-    // be highlighted.
-    void enableHint(const int t);
+    // be highlighted. Also sets <hintFor> field, to inform <generateHint> which
+    // player to generate hint next to.
+    void enableHint(const WhichPlayer which, const int t);
 
     // Find a pair of blocks that can be matched and be reached by the player
-    // (either player 1 or player 2).
+    // (either player 1 or player 2). The blocks that are closer to <hintFor>
+    // are favored.
     void generateHint();
 
     // Remove current highlighted blocks both visually and logically.
@@ -289,8 +295,15 @@ private:
     // true, <buffer> will be set to that item block.
     bool checkItem(const int x, const int y, Block *&buffer);
 
-    // Given to blocks, check if they can be connected within <kMaxTurns> turns,
-    // and if path is not null, return the path that connects two blocks.
+    // Given two blocks, check if they can be matched. This includes checking
+    // block type, block content, their position, and choosing player.
+    // They they can be catched and <path> is not null, return the path that
+    // connects two blocks.
+    bool checkMatch(Block *const b1, Block *const b2, QList<Direction> *path);
+
+    // Given two blocks, check if they can be connected within <kMaxTurns>
+    // turns, and if <path> is not null, return the path that connects two
+    // blocks. Does not check block type or block content or choosing player.
     bool checkConnectivity(Block *const from,
                            Block *const to,
                            QList<Direction> *path);
@@ -311,8 +324,10 @@ private:
                               QVector<Direction> &directions);
 
     // Iterate through all posibilities to check if there's still a pair of
-    // blocks that can be matched. Returns true and populates <b1> and <b2> with
-    // the two blocks if such a pair exists.
+    // blocks that can be matched and reached by player. Returns true and
+    // populates <b1> and <b2> with the two blocks if such a pair exists.
+    // Because this function is also used to generate hints, when <hint> is true
+    // blocks near <hintFor> will be checked first;
     bool hasNextStep(Block *&b1, Block *&b2);
 
     // A wrapper for `hasNextStep` in case the two conencting blocks are not
@@ -372,15 +387,16 @@ protected:
 
 private slots:
     // Receives signal when a player <which> has chosen two blocks.
-    // Check if <b1>, <b2> can be connected with in <kMaxTurns>, if true, draws
-    // the link, add score, eliminate the two blocks, check for solvability,
-    // game end, and decides whether to generate a new pair of hints.
+    // Check if <b1>, <b2> are of the same group and can be connected with in
+    // <kMaxTurns>, if true, draws the link, add score, eliminate the two
+    // blocks, check for solvability  game end, and decides whether to generate
+    // a new pair of hints.
     void handleValidateBlock(const WhichPlayer which,
                              Block *const b1,
                              Block *const b2);
 
-    // Receives signal when a match is found, and a player's score is changed. Just
-    // change the score label.
+    // Receives signal when a match is found, and a player's score is changed.
+    // Just change the score label.
     void handleScoreChanged(const WhichPlayer which, const int newScore);
 
     // Receives signals from countdown timer, which are sent per second, to

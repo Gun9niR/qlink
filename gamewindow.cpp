@@ -391,7 +391,7 @@ void GameWindow::spawnItem()
     }
 }
 
-void GameWindow::consumeItem(Block *const block) {
+void GameWindow::consumeItem(const WhichPlayer which, Block *const block) {
     assert(block->type() == BlockType::kItem);
     switch (block->content()) {
     case ItemType::kExtend30s:
@@ -401,7 +401,7 @@ void GameWindow::consumeItem(Block *const block) {
         shuffle();
         break;
     case ItemType::kHint:
-        enableHint(kHintTimeMsec);
+        enableHint(which, kHintTimeMsec);
         break;
     default:
         break;
@@ -467,13 +467,14 @@ void GameWindow::shuffle()
     }
 }
 
-void GameWindow::enableHint(const int t)
+void GameWindow::enableHint(const WhichPlayer which, const int t)
 {
     hintTimer->stop();
     hintTimer->start(t);
 
-    generateHint();
     this->hint = true;
+    this->hintFor = which;
+    generateHint();
 }
 
 void GameWindow::generateHint()
@@ -599,10 +600,10 @@ void GameWindow::movePlayer(const WhichPlayer which,
     }
 
     if (iBuffer1) {
-        consumeItem(iBuffer1);
+        consumeItem(which, iBuffer1);
     }
     if (iBuffer2) {
-        consumeItem(iBuffer2);
+        consumeItem(which, iBuffer2);
     }
 
     player->update();
@@ -663,6 +664,17 @@ bool GameWindow::checkItem(const int x, const int y, Block *&buffer)
         return true;
     }
     return false;
+}
+
+bool GameWindow::checkMatch(Block *const b1, Block *const b2,
+                            QList<Direction> *path)
+{
+    return b1 != b2 &&
+           b1->type() == BlockType::kBlock &&
+           b2->type() == BlockType::kBlock &&
+           b1->content() == b2->content() &&
+           b1->chosenBy() == b2->chosenBy() &&
+           checkConnectivity(b1, b2, path);
 }
 
 bool GameWindow::checkConnectivity(Block *const from,
@@ -881,8 +893,11 @@ bool GameWindow::hasNextStep(Block *&b1, Block *&b2)
     };
 
     for (int i = 0; i < maxIter; ++i) {
-        const WhichPlayer which = !i ? WhichPlayer::kPlayer1 :
-                                       WhichPlayer::kPlayer2;
+        const WhichPlayer which =
+                (!i && hintFor != WhichPlayer::kPlayer2) ||
+                (i && hintFor == WhichPlayer::kPlayer2) ?
+                    WhichPlayer::kPlayer1 :
+                    WhichPlayer::kPlayer2;
         Player *player = players[which];
         const auto &rc = getRC(player->geometry().center());
         const int playerR = rc.first;
@@ -921,14 +936,16 @@ bool GameWindow::hasNextStep(Block *&b1, Block *&b2)
     return false;
 }
 
-bool GameWindow::hasNextStep() {
+bool GameWindow::hasNextStep()
+{
     Block *b1;
     Block *b2;
     bool f = hasNextStep(b1, b2);
     return f;
 }
 
-void GameWindow::saveToFile() {
+void GameWindow::saveToFile()
+{
     QFile file("save.txt");
     file.open(QIODevice::WriteOnly);
     QTextStream s(&file);
@@ -958,6 +975,9 @@ void GameWindow::saveToFile() {
 
     // Save hint status.
     s << hint << '\n';
+
+    // Save hint for.
+    s << hintFor << '\n';
 
     // Save remaining hint time.
     s << hintTimeRemaining << '\n';
@@ -1107,6 +1127,8 @@ void GameWindow::prepareSavedGame()
     s >> this->timeRemaining;
     s >> x;
     this->hint = static_cast<bool>(x);
+    s >> x;
+    this->hintFor = static_cast<WhichPlayer>(x);
     s >> this->hintTimeRemaining;
 
     // Load hint pair.
@@ -1235,8 +1257,8 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
         }
 
         // Check for hint.
-        if (hint && ((b1 == hintPair.first && b2 == hintPair.second) ||
-                (b1 == hintPair.second && b2 == hintPair.first))) {
+        if (hint && ((b1 == hintPair.first || b1 == hintPair.second) ||
+                (b2 == hintPair.first && b2 == hintPair.second))) {
             generateHint();
         }
 
@@ -1305,6 +1327,8 @@ void GameWindow::handleKeyPress() {
 void GameWindow::handleStopHint()
 {
     this->hint = false;
+    this->hintFor = WhichPlayer::kNoPlayer;
+
     // If game stopps, just leave the hint highlight be.aaa
     if (this->status != GameStatus::kStopped) {
         removeCurrentHint();

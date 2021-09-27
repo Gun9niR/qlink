@@ -1,11 +1,12 @@
 #include "uimanager.h"
-
-#include <QApplication>
+#include "unittest.h"
 
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
+    // To run test, uncomment next line and comment the rest of main().
+    // QTEST_MAIN_IMPL(UnitTest);
 
+    QApplication a(argc, argv);
     UiManager w;
     w.showDefaultWindow();
 

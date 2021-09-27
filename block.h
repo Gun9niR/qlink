@@ -4,9 +4,12 @@
 #include "includes.h"
 #include "types.h"
 
+class UnitTest;
+
 // The basic element that constitutes the map. Manages both the logic and ui of
 // map unit operations.
 class Block: public QPushButton {
+    friend class UnitTest;
     friend QDebug operator<<(QDebug dbg, const Block &b);
     friend QTextStream &operator<<(QTextStream &ds, const Block &b);
 
@@ -40,7 +43,7 @@ public:
           const int c,
           const bool markedAsHint = false,
           const BlockType t = BlockType::kEmpty,
-          const BlockContent bc = 0,
+          const BlockContent bc = Block::kEmptyBlock,
           const WhichPlayer p = WhichPlayer::kNoPlayer,
           QWidget *parent = nullptr);
     static Block * fromTextStream(QTextStream &s);

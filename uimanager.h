@@ -12,7 +12,6 @@ class UiManager: public QObject {
 private:
     static const int kWindowWidth = 1200;
     static const int kWindowHeight = 630;
-    static const unique_ptr<UiConfig> kUiConfig;
 
     StartWindow startWindow;
     GameWindow gameWindow;
@@ -21,6 +20,8 @@ private:
     // same screen position.
     void switchToWindow(QWidget *const sender, QWidget *const receiver);
 public:
+    static const unique_ptr<UiConfig> kUiConfig;
+
     UiManager();
 
     // Defualt window is StartWindow.

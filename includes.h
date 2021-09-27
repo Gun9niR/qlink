@@ -24,6 +24,7 @@
 #include <QPair>
 #include <QPushButton>
 #include <QScreen>
+#include <QtTest/QtTest>
 #include <QTimer>
 #include <QThread>
 #include <QUuid>

@@ -4,5 +4,4 @@ This is the project for SE123 @SJTU-SE. Project requirements are [here](https://
 
 ## Todo
 
-- [ ] Unit test
 - [ ] UI

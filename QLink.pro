@@ -1,4 +1,5 @@
-QT       += core gui
+QT       += core gui \
+            testlib
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -17,6 +18,7 @@ SOURCES += \
     startwindow.cpp \
     uiconfig.cpp \
     uimanager.cpp \
+    unittest.cpp \
     utils.cpp
 
 HEADERS += \
@@ -29,6 +31,7 @@ HEADERS += \
     types.h \
     uiconfig.h \
     uimanager.h \
+    unittest.h \
     utils.h
 
 FORMS += \
