@@ -41,8 +41,10 @@ private:
     // Number of columns in the map.
     static const int kMaxCols = 30;
 
-    // Number of blocks in the map. It's value must be kMaxRows * kMaxCols.
-    static const int kBlockNum = 200;
+    // Number of blocks in the map.
+    // static const int kBlockNum = 200;
+    // DEMO: Uncomment next line for quick game end.
+    static const int kBlockNum = 10;
 
     // Number of blocks each group. Each group has equal number of blocks at the
     // beginning.
@@ -54,7 +56,7 @@ private:
     static const int kMaxGeneratePlayerTrials = 1000;
 
     // Ui size configurations.
-    static const int kStatusBarHeight = 30;
+    static const int kStatusBarHeight = 50;
     static const int kMapHeight = 600;
     static const int kMapWidth = 1200;
 
@@ -86,6 +88,7 @@ private:
     // Player independednt key mappings.
     static const int kPauseKey = 'P';
     static const int kSaveKey = 'S';
+    static const QString kShadingStyleSheet;
 
     // Player specific key mappings.
     static const QMap<WhichPlayer, QMap<Direction, int>> kKeyMapping;
@@ -97,11 +100,11 @@ private:
     // ============================================================
 
     // Window UI configurations. Using a another class for extendibility.
-    const unique_ptr<UiConfig> &WINDOW_CONFIG;
+    const unique_ptr<UiConfig> &kWindowConfig;
 
     // Block size.
-    const int BLOCK_HEIGHT;
-    const int BLOCK_WIDTH;
+    const int kBlockHeight;
+    const int kBlockWidth;
 
     // Layout of the top status bar.
     QHBoxLayout *statusLayout;
@@ -115,9 +118,15 @@ private:
     // The label in status bar that displays remaining number.
     QLabel *timeLbl;
 
+    QWidget *readyShading;
+    QWidget *pauseShading;
+    QWidget *gameEndShading;
+
     // Must only be called once. Allocates status bar, map, set parent
     // relations.
     void initLayout();
+    void initReadyShading();
+    void initPauseShading();
 
     // Remove all widgets from status bar and map. Intended for restart.
     void resetLayout();
@@ -131,12 +140,14 @@ private:
     // Must be called after invocation of generateMap().
     void drawMap();
 
-    // Draw the conenction from a given block <from>, using the <path> parameter
+    // Draw the conenction with the color of player[`which`] from a given block
+    // <from>, using the <path> parameter
     // that provides a sequence of directions of each step. Returns a uuid of
     // the set of lines created by this invocation, so that they can be erased
     // later.
     QUuid drawConnection(Block *const from,
-                        const QList<Direction> &path);
+                        const QList<Direction> &path,
+                        const WhichPlayer which);
 
     // Clear the set of lines with previosuly described <uuid>.
     void clearConnection(const QUuid &uuid);
@@ -162,9 +173,12 @@ private:
     // Promt the user that time's up.
     void promptTimesUp();
 
-    // Promt the users that one player has won, or there's a tie. Only used in
-    // multiplayer mode.
-    void promptOnePlayerWins();
+    // Underlying function that `promptSuccess`, `promptStuck` and
+    // `promptTimesUp` calls
+    void promptGameEnd(QString title, QString subtitle);
+
+    // Get the string to be displayed on score label from actual <score> value.
+    QString getScoreString(const WhichPlayer p, const int score);
 
     // ============================================================
     //
@@ -172,6 +186,9 @@ private:
     //
     // ============================================================
 
+    // DEMO: initialize the field to true to generate an errornous map,
+    // with one block that cannot be eliminated.
+    bool errornousMap = true;
     // Indicates whether the game is ready to start, started, paused, stopped,
     // stuck, etc.
     GameStatus status;
@@ -219,9 +236,6 @@ private:
     // hints that are caused by reasons other than block elimination, such as
     // a new hint item is activated while the previous one has not expired.
     QPair<Block *, Block *> hintPair;
-
-    // Get the string to be displayed on score label from actual <score> value.
-    static QString getScoreString(const int score);
 
     // Get the string to be displayed on time label from actual <sec> value.
     static QString getTimeString(const int sec);
@@ -411,6 +425,14 @@ private slots:
     // hint visually and logically.
     void handleStopHint();
 
+    // Receives signal when resume button is hit when the game is paused.
+    void handleResume();
+
+    void handleSave();
+
+    void handleLoad();
+
+    void handleBack();
 signals:
     // Emitted when the game ends and user presses any key to return to start
     // window.

@@ -19,8 +19,23 @@ void StartWindow::initLayout()
     QVBoxLayout *outmostLayout = new QVBoxLayout();
     QHBoxLayout *btnLayout = new QHBoxLayout();
 
-    // Set layout relations.
-    outmostLayout->addLayout(btnLayout);
+    // Logo and author
+    QLabel *logoLbl = new QLabel("QLink");
+    Utils::setWidgetFontSize(logoLbl, 100);
+    logoLbl->adjustSize();
+    logoLbl->setFixedHeight(logoLbl->geometry().height());
+    logoLbl->setAlignment(Qt::AlignHCenter);
+
+
+    QLabel *authorLbl = new QLabel("By GZD");
+    Utils::setWidgetFontSize(authorLbl, 50);
+    authorLbl->adjustSize();
+    authorLbl->setFixedHeight(authorLbl->geometry().height());
+    authorLbl->setAlignment(Qt::AlignHCenter);
+
+    outmostLayout->addWidget(logoLbl);
+    outmostLayout->addSpacing(-100);
+    outmostLayout->addWidget(authorLbl);
 
     // Declare the four buttons.
     QPushButton *singlePlayerBtn = new QPushButton("Single player");
@@ -35,12 +50,17 @@ void StartWindow::initLayout()
             this, &StartWindow::onClickMultiPlayer);
     connect(loadBtn, &QPushButton::clicked,
             this, &StartWindow::onClickLoad);
+    connect(quitBtn, &QPushButton::clicked,
+            this, &StartWindow::onClickQuit);
 
     // The container for all four buttons.
     btnLayout->addWidget(singlePlayerBtn);
     btnLayout->addWidget(multiPlayerBtn);
     btnLayout->addWidget(loadBtn);
     btnLayout->addWidget(quitBtn);
+
+    // Set layout relations.
+    outmostLayout->addLayout(btnLayout);
 
     this->setLayout(outmostLayout);
 }
@@ -62,5 +82,5 @@ void StartWindow::onClickLoad()
 
 void StartWindow::onClickQuit()
 {
-    QApplication::quit();
+    QApplication::exit();
 }

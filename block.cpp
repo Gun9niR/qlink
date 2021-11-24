@@ -183,7 +183,11 @@ void Block::markAsHint() {
 
 void Block::unmarkAsHint() {
     this->markedAsHint = false;
-    this->update();
+    try {
+        this->update();
+    }  catch (...) {
+        return;
+    }
 }
 
 QDebug operator<<(QDebug dbg, const Block &b) {

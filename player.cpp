@@ -24,6 +24,7 @@ Player * Player::fromTextStream(QTextStream &s)
     int x;
     int y;
     int score;
+
     Player *p;
     s >> id >> x >> y >> score;
     p = new Player(static_cast<WhichPlayer>(id), x, y, score);

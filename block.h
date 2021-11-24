@@ -4,12 +4,14 @@
 #include "includes.h"
 #include "types.h"
 
+class GameWindow;
 class UnitTest;
 
 // The basic element that constitutes the map. Manages both the logic and ui of
 // map unit operations.
 class Block: public QPushButton {
     friend class UnitTest;
+    friend class GameWindow;
     friend QDebug operator<<(QDebug dbg, const Block &b);
     friend QTextStream &operator<<(QTextStream &ds, const Block &b);
 

@@ -19,6 +19,9 @@ public:
 
     // Remove all widgets from a widget.
     static void removeAllWidgets(QWidget *const widget);
+
+    // Set font size of a widget.
+    static void setWidgetFontSize(QWidget *const widget, int fontSize);
 };
 
 

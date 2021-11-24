@@ -29,3 +29,10 @@ void Utils::removeAllWidgets(QWidget *const widget)
 {
     qDeleteAll(widget->findChildren<QWidget*>("", Qt::FindDirectChildrenOnly));
 }
+
+void Utils::setWidgetFontSize(QWidget *const widget, int fontSize)
+{
+    QFont font = widget->font();
+    font.setPointSize(fontSize);
+    widget->setFont(font);
+}

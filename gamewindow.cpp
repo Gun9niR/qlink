@@ -22,9 +22,10 @@ const QMap<WhichPlayer, QMap<Direction, int>> GameWindow::kKeyMapping = {
 
 GameWindow::GameWindow(const unique_ptr<UiConfig> &config, QWidget *parent):
     QWidget(parent),
-    WINDOW_CONFIG(config),
-    BLOCK_HEIGHT(kMapHeight / kMaxRows),
-    BLOCK_WIDTH(kMapWidth / kMaxCols),
+    kWindowConfig(config),
+    kBlockHeight(kMapHeight / kMaxRows),
+    kBlockWidth(kMapWidth / kMaxCols),
+    gameEndShading(nullptr),
     status(GameStatus::kUnprepared),
     blockMap(kMaxRows, QVector<Block *>(kMaxCols)),
     countDownTimer(new QTimer(this)),
@@ -37,17 +38,17 @@ GameWindow::GameWindow(const unique_ptr<UiConfig> &config, QWidget *parent):
     assert(kMapWidth == config->windowWidth());
 
     // Check the number of blocks and block types.
-    assert(kBlockNum < kMaxRows * kMaxCols - 1);
+    assert(kBlockNum < kMaxRows * kMaxCols - 1 - errornousMap);
     assert(kBlocksPerType * kTypeNum == kBlockNum);
     assert(!(kBlocksPerType & 1));
 
     // Check block and height must be even numbers.
-    assert(!(BLOCK_HEIGHT & 1));
-    assert(!(BLOCK_WIDTH & 1));
+    assert(!(kBlockHeight & 1));
+    assert(!(kBlockWidth & 1));
 
     // Check block size has not been rounded.
-    assert(BLOCK_HEIGHT * kMaxRows == kMapHeight);
-    assert(BLOCK_WIDTH * kMaxCols == kMapWidth);
+    assert(kBlockHeight * kMaxRows == kMapHeight);
+    assert(kBlockWidth * kMaxCols == kMapWidth);
 
     // Check player configuration.
     assert(kKeyMapping.contains(WhichPlayer::kPlayer1) &&
@@ -71,6 +72,9 @@ GameWindow::GameWindow(const unique_ptr<UiConfig> &config, QWidget *parent):
     connect(hintTimer, &QTimer::timeout,
             this, &GameWindow::handleStopHint);
 
+    hintPair.first = nullptr;
+    hintPair.second = nullptr;
+
 }
 
 void GameWindow::initLayout()
@@ -84,13 +88,85 @@ void GameWindow::initLayout()
     // Contents of status bar to be set later.
     statusLayout = new QHBoxLayout();
     mapLayout = new QLinkMap();
-    mapLayout->setFixedHeight(WINDOW_CONFIG->windowHeight() - kStatusBarHeight);
+    mapLayout->setFixedHeight(kWindowConfig->windowHeight() - kStatusBarHeight);
 
     // Set layout relations.
     outmostLayout->addLayout(statusLayout);
     outmostLayout->addWidget(mapLayout);
 
+    initReadyShading();
+    initPauseShading();
+
     this->setLayout(outmostLayout);
+}
+
+void GameWindow::initReadyShading()
+{
+    readyShading = new QWidget(this);
+    readyShading->setObjectName("readyShading");
+    readyShading->raise();
+    readyShading->setStyleSheet(
+                "QWidget#readyShading{background-color: rgba(0, 0, 0, 0.7)}");
+    readyShading->setGeometry(0, 0,
+                              kWindowConfig->windowWidth(),
+                              kWindowConfig->windowHeight());
+
+    // Need to use a layout to center the widget.
+    QVBoxLayout *layout = new QVBoxLayout(readyShading);
+
+    QLabel *readyLbl = new QLabel("Press any key to start", readyShading);
+    Utils::setWidgetFontSize(readyLbl, 70);
+    readyLbl->setAlignment(Qt::AlignCenter);
+    readyLbl->setStyleSheet("background: transparent");
+    readyLbl->adjustSize();
+    readyLbl->setFixedHeight(readyLbl->geometry().height());
+
+    layout->addWidget(readyLbl);
+
+    readyShading->setLayout(layout);
+    readyShading->hide();
+}
+
+void GameWindow::initPauseShading()
+{
+    pauseShading = new QWidget(this);
+    pauseShading->setObjectName("pauseShading");
+    pauseShading->raise();
+    pauseShading->setStyleSheet(
+                "QWidget#pauseShading{background-color: rgba(0, 0, 0, 0.7)}");
+    pauseShading->setGeometry(0, 0,
+                              kWindowConfig->windowWidth(),
+                              kWindowConfig->windowHeight());
+    QVBoxLayout *pauseLayout = new QVBoxLayout(pauseShading);
+
+    QLabel *pauseLbl = new QLabel("Game Paused");
+    Utils::setWidgetFontSize(pauseLbl, 100);
+    pauseLbl->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    pauseLbl->setStyleSheet("background: transparent");
+    pauseLbl->adjustSize();
+    pauseLbl->setFixedHeight(pauseLbl->geometry().height());
+
+    QHBoxLayout *pauseOptionsLayout = new QHBoxLayout();
+    QPushButton *resumeBtn = new QPushButton("Resume");
+    QPushButton *saveBtn = new QPushButton("Save");
+    QPushButton *loadBtn = new QPushButton("Load");
+    QPushButton *backBtn = new QPushButton("Back to menu");
+
+    connect(resumeBtn, &QPushButton::pressed, this, &GameWindow::handleResume);
+    connect(saveBtn, &QPushButton::pressed, this, &GameWindow::handleSave);
+    connect(loadBtn, &QPushButton::pressed, this, &GameWindow::handleLoad);
+    connect(backBtn, &QPushButton::pressed, this, &GameWindow::handleBack);
+
+    pauseOptionsLayout->addWidget(resumeBtn);
+    pauseOptionsLayout->addWidget(saveBtn);
+    pauseOptionsLayout->addWidget(loadBtn);
+    pauseOptionsLayout->addWidget(backBtn);
+
+    pauseLayout->addWidget(pauseLbl, Qt::AlignHCenter);
+    pauseLayout->addLayout(pauseOptionsLayout);
+
+    pauseShading->setLayout(pauseLayout);
+    pauseShading->hide();
 }
 
 void GameWindow::resetLayout()
@@ -105,13 +181,18 @@ void GameWindow::drawStatusBar(const GameMode &mode)
     for (int i = 0; i < (mode == GameMode::kSingle ? 1 : 2); ++i) {
         const WhichPlayer p = !i ? WhichPlayer::kPlayer1 : kPlayer2;
         QLabel *scoreLbl = new QLabel();
-        scoreLbl->setText(getScoreString(players[p]->score));
+        scoreLbl->setText(getScoreString(p, players[p]->score));
+        Utils::setWidgetFontSize(scoreLbl, 30);
+
+
         statusLayout->addWidget(scoreLbl);
         this->scoreLbls[p] = scoreLbl;
     }
 
     timeLbl = new QLabel();
     timeLbl->setText(getTimeString(timeRemaining));
+    Utils::setWidgetFontSize(timeLbl, 30);
+
     statusLayout->addWidget(timeLbl);
 }
 
@@ -126,26 +207,29 @@ void GameWindow::drawMap()
 
             block->setText(QString::number(
                                   blockMap[row][col]->content()));
-            block->setGeometry(col * BLOCK_WIDTH,
-                               row * BLOCK_HEIGHT,
-                               BLOCK_WIDTH,
-                               BLOCK_HEIGHT);
+            block->setGeometry(col * kBlockWidth,
+                               row * kBlockHeight,
+                               kBlockWidth,
+                               kBlockHeight);
+            block->show();
         }
     }
 }
 
 QUuid GameWindow::drawConnection(Block *const from,
-                                 const QList<Direction> &path)
+                                 const QList<Direction> &path,
+                                 const WhichPlayer which)
 {
 
     static QMap<Direction, QPair<int, int>> dPos = {
-        { Direction::kUp, { 0, -BLOCK_HEIGHT } },
-        { Direction::kDown, { 0, BLOCK_HEIGHT } },
-        { Direction::kLeft, { -BLOCK_WIDTH, 0 } },
-        { Direction::kRight, { BLOCK_WIDTH, 0 } }
+        { Direction::kUp, { 0, -kBlockHeight } },
+        { Direction::kDown, { 0, kBlockHeight } },
+        { Direction::kLeft, { -kBlockWidth, 0 } },
+        { Direction::kRight, { kBlockWidth, 0 } }
     };
     QList<QLine> lines;
     QUuid uuid;
+    QColor color = Block::kHighlightColor[which];
     auto &fromG = from->geometry();
     int startX = fromG.center().x();
     int startY = fromG.center().y();
@@ -182,7 +266,7 @@ QUuid GameWindow::drawConnection(Block *const from,
         startY = endY;
     }
 
-    uuid = mapLayout->addLines(lines);
+    uuid = mapLayout->addLines(lines, color);
     mapLayout->update();
     return uuid;
 }
@@ -195,51 +279,130 @@ void GameWindow::clearConnection(const QUuid &uuid)
 
 void GameWindow::promptStart()
 {
-    QMessageBox::information(this, "QLink", "Press any key to start");
+    readyShading->raise();
+    readyShading->show();
 }
 
 void GameWindow::promptPause()
 {
-    QMessageBox::information(this, "QLink", "Game paused");
+    pauseShading->raise();
+    pauseShading->show();
 }
 
 void GameWindow::promtResumeFromLoad()
 {
-    QMessageBox::information(this, "QLink", "Press any key to resume");
+    promptPause();
 }
 
 void GameWindow::promptSuccess()
 {
-    QMessageBox::information(this, "QLink", "You have succeeded");
+    QString title = "All blocks are matched!";
+    QString subtitle;
+    if (mode == GameMode::kSingle) {
+        subtitle = "You have succeeded";
+    } else {
+        int score1 = players[WhichPlayer::kPlayer1]->score;
+        int score2 = players[WhichPlayer::kPlayer2]->score;
+        if (score1 > score2) {
+            subtitle = "Player 1 wins";
+        } else if (score1 < score2) {
+            subtitle = "Player 2 wins";
+        } else {
+            subtitle = "A draw";
+        }
+    }
+    promptGameEnd(title, subtitle);
 }
 
 void GameWindow::promptStuck()
 {
-    QMessageBox::information(this, "QLink", "No more match");
+    QString title = "No more match available";
+    QString subtitle;
+    if (mode == GameMode::kDouble) {
+        int score1 = players[WhichPlayer::kPlayer1]->score;
+        int score2 = players[WhichPlayer::kPlayer2]->score;
+        if (score1 > score2) {
+            subtitle = "Player 1 wins";
+        } else if (score1 < score2) {
+            subtitle = "Player 2 wins";
+        } else {
+            subtitle = "A draw";
+        }
+    } else {
+        subtitle = "Your score is " +
+                   QString::number(players[WhichPlayer::kPlayer1]->score);
+    }
+    promptGameEnd(title, subtitle);
 }
 
 void GameWindow::promptTimesUp()
 {
-    QMessageBox::information(this, "QLink", "Times up!");
-}
-
-void GameWindow::promptOnePlayerWins() {
-    assert(this->mode == GameMode::kDouble);
-    int s1 = players[WhichPlayer::kPlayer1]->score;
-    int s2 = players[WhichPlayer::kPlayer2]->score;
-
-    if (s1 > s2) {
-        QMessageBox::information(this, "QLink", "Player 1 wins!");
-    } else if (s1 == s2) {
-        QMessageBox::information(this, "QLink", "Tie!");
-    } else {
-        QMessageBox::information(this, "QLink", "Player 2 wins!");
+    QString title = "Times up";
+    QString subtitle;
+    if (mode == GameMode::kDouble) {
+        int score1 = players[WhichPlayer::kPlayer1]->score;
+        int score2 = players[WhichPlayer::kPlayer2]->score;
+        if (score1 > score2) {
+            subtitle = "Player 1 wins";
+        } else if (score1 < score2) {
+            subtitle = "Player 2 wins";
+        } else {
+            subtitle = "A draw";
+        }
     }
+    promptGameEnd(title, subtitle);
 }
 
-QString GameWindow::getScoreString(const int score)
+void GameWindow::promptGameEnd(QString title, QString subtitle)
 {
-    return "Score: " + QString::number(score);
+    gameEndShading = new QWidget(this);
+    gameEndShading->setObjectName("gameEndShading");
+    gameEndShading->setStyleSheet(
+            "QWidget#gameEndShading{background-color: rgba(0, 0, 0, 0.7)}");
+    gameEndShading->setGeometry(0, 0,
+                              kWindowConfig->windowWidth(),
+                              kWindowConfig->windowHeight());
+
+    // Need to use a layout to center the widget.
+    QVBoxLayout *layout = new QVBoxLayout(gameEndShading);
+
+    QLabel *titleLbl = new QLabel(title, gameEndShading);
+    Utils::setWidgetFontSize(titleLbl, 70);
+    titleLbl->setAlignment(Qt::AlignCenter);
+    titleLbl->setStyleSheet("background: transparent");
+    titleLbl->adjustSize();
+    titleLbl->setFixedHeight(titleLbl->geometry().height());
+
+    QLabel *subtitleLbl = new QLabel(subtitle);
+    Utils::setWidgetFontSize(subtitleLbl, 50);
+    subtitleLbl->setAlignment(Qt::AlignCenter);
+    subtitleLbl->setStyleSheet("background: transparent");
+    subtitleLbl->adjustSize();
+    subtitleLbl->setFixedHeight(titleLbl->geometry().height());
+
+    QPushButton *backLbl = new QPushButton("Click here to go to main menu");
+    Utils::setWidgetFontSize(backLbl, 40);
+    backLbl->setStyleSheet("background: transparent");
+    backLbl->adjustSize();
+    backLbl->setFixedHeight(titleLbl->geometry().height());
+
+    connect(backLbl, &QPushButton::pressed, this, &GameWindow::handleBack);
+
+    layout->addWidget(titleLbl);
+    layout->addWidget(subtitleLbl);
+    layout->addWidget(backLbl);
+
+    gameEndShading->setLayout(layout);
+    gameEndShading->raise();
+    gameEndShading->show();
+}
+
+QString GameWindow::getScoreString(const WhichPlayer p, const int score)
+{
+    QString playerIndicator = (mode == GameMode::kSingle) ? "" :
+                                  (p == WhichPlayer::kPlayer1) ? "1" :
+                                      "2";
+    return "Player " + playerIndicator + " Score: " + QString::number(score);
 }
 
 QString GameWindow::getTimeString(const int sec)
@@ -268,6 +431,14 @@ void GameWindow::generateMap()
                     Block::kEmptyBlock;
         blockMap[row][col] = new Block(row, col, false, blockType, blockContent,
                                        WhichPlayer::kNoPlayer, mapLayout);
+    }
+
+    if (errornousMap) {
+        int idx = kMaxRows * kMaxCols - 1;
+        int row = idx / kMaxCols;
+        int col = idx % kMaxCols;
+        blockMap[row][col]->bc = 1;
+        blockMap[row][col]->t = BlockType::kBlock;
     }
 }
 
@@ -300,8 +471,8 @@ bool GameWindow::generatePlayer(const WhichPlayer &which)
             !row || row == kMaxRows - 1 || !col || col == kMaxCols) {
             continue;
         } else {
-            int x = col * BLOCK_WIDTH + (BLOCK_WIDTH >> 1);
-            int y = row * BLOCK_HEIGHT + (BLOCK_HEIGHT >> 1);
+            int x = col * kBlockWidth + (kBlockWidth >> 1);
+            int y = row * kBlockHeight + (kBlockHeight >> 1);
 
             Player *newPlayer = new Player(which, x, y, 0, mapLayout);
             players.insert(which, newPlayer);
@@ -333,6 +504,7 @@ void GameWindow::startGame()
     this->status = GameStatus::kPlaying;
     countDownTimer->start();
     keyPressTimer->start();
+    readyShading->hide();
 }
 
 void GameWindow::pauseGame()
@@ -345,7 +517,6 @@ void GameWindow::pauseGame()
 
     if (this->hint) {
         this->hintTimeRemaining = hintTimer->remainingTime();
-        qDebug() << this->hintTimeRemaining;
         hintTimer->stop();
     }
 }
@@ -365,6 +536,7 @@ void GameWindow::resumeGame()
 
 void GameWindow::stopGame()
 {
+    this->pressedKeys.clear();
     this->status = GameStatus::kStopped;
     countDownTimer->stop();
     keyPressTimer->stop();
@@ -949,6 +1121,9 @@ void GameWindow::saveToFile()
     QFile file("save.txt");
     file.open(QIODevice::WriteOnly);
     QTextStream s(&file);
+    int chosenR;
+    int chosenC;
+    Block *chosenBlk;
 
     // Save mode.
     s << mode << '\n';
@@ -965,6 +1140,18 @@ void GameWindow::saveToFile()
     s << *players[WhichPlayer::kPlayer1] << '\n';
     if (mode == GameMode::kDouble) {
         s << *players[WhichPlayer::kPlayer2] << '\n';
+    }
+
+    // Save the blocks the player has chosen.
+    chosenBlk = players[WhichPlayer::kPlayer1]->chosenBlock;
+    chosenR = chosenBlk ? chosenBlk->row() : -1;
+    chosenC = chosenBlk ? chosenBlk->col() : -1;
+    s << chosenR << ' ' << chosenC << '\n';
+    if (mode == GameMode::kDouble) {
+        chosenBlk = players[WhichPlayer::kPlayer2]->chosenBlock;
+        chosenR = chosenBlk ? chosenBlk->row() : -1;
+        chosenC = chosenBlk ? chosenBlk->col() : -1;
+        s << chosenR << ' ' << chosenC << '\n';
     }
 
     // Save blocks remaining.
@@ -986,10 +1173,14 @@ void GameWindow::saveToFile()
     if (hintPair.first) {
         Block *b = hintPair.first;
         s << b->row() << ' ' << b->col() << '\n';
+    } else {
+        s << "-1 -1\n";
     }
     if (hintPair.second) {
         Block *b = hintPair.second;
         s << b->row() << ' ' << b->col() << '\n';
+    } else {
+        s << "-1 -1\n";
     }
 
     file.close();
@@ -1000,7 +1191,7 @@ QPair<int, int> GameWindow::getRC(const int x, const int y)
 {
     assert(x >= 0 && x <= mapLayout->geometry().width() &&
            y >= 0 && y <= mapLayout->geometry().height());
-    return qMakePair(y / BLOCK_HEIGHT, x / BLOCK_WIDTH);
+    return qMakePair(y / kBlockHeight, x / kBlockWidth);
 }
 
 QPair<int, int> GameWindow::getRC(const QPoint &p)
@@ -1015,22 +1206,22 @@ int GameWindow::rc2Idx(const QPair<int, int> &p)
 
 int GameWindow::getTop(const int r)
 {
-    return r * BLOCK_HEIGHT;
+    return r * kBlockHeight;
 }
 
 int GameWindow::getBottom(const int r)
 {
-    return r * BLOCK_HEIGHT + BLOCK_HEIGHT;
+    return r * kBlockHeight + kBlockHeight;
 }
 
 int GameWindow::getLeft(const int c)
 {
-    return c * BLOCK_WIDTH;
+    return c * kBlockWidth;
 }
 
 int GameWindow::getRight(const int c)
 {
-    return c * BLOCK_WIDTH + BLOCK_WIDTH;
+    return c * kBlockWidth + kBlockWidth;
 }
 
 bool GameWindow::isPlayerAt(const int r, const int c) {
@@ -1054,11 +1245,7 @@ void GameWindow::changeTime(const int dsec)
 
     if (!timeRemaining) {
         stopGame();
-        if (this->mode == GameMode::kSingle) {
-            promptTimesUp();
-        } else {
-            promptOnePlayerWins();
-        }
+        promptTimesUp();
     }
 }
 
@@ -1080,7 +1267,7 @@ void GameWindow::prepareNewGame(const GameMode mode)
 
     // Reset time.
     this->timeRemaining = kInitialTime;
-    this->blocksRemaining = kBlockNum;
+    this->blocksRemaining = kBlockNum + errornousMap;
 
     // Draw status bar.
     drawStatusBar(mode);
@@ -1091,15 +1278,21 @@ void GameWindow::prepareNewGame(const GameMode mode)
     // Connect player logic with Ui.
     connectPlayerSignals(mode);
 
+    hintPair.first = hintPair.second = nullptr;
+
     status = GameStatus::kPreparedNew;
 }
 
 void GameWindow::prepareSavedGame()
 {
+    resetLayout();
+
     QFile file("save.txt");
     file.open(QIODevice::ReadOnly);
     QTextStream s(&file);
     int x;
+    int chosenR;
+    int chosenC;
 
     // Load mode.
     s >> x;
@@ -1115,11 +1308,31 @@ void GameWindow::prepareSavedGame()
     }
 
     // Load player.
-    players[WhichPlayer::kPlayer1] = Player::fromTextStream(s);
-    players[WhichPlayer::kPlayer1]->setParent(mapLayout);
+    Player *player1 = Player::fromTextStream(s);
+    players[WhichPlayer::kPlayer1] = player1;
+    player1->hide();
+    player1->setParent(mapLayout);
+    player1->show();
     if (mode == GameMode::kDouble) {
-         players[WhichPlayer::kPlayer2] = Player::fromTextStream(s);
-         players[WhichPlayer::kPlayer2]->setParent(mapLayout);
+        Player *player2 = Player::fromTextStream(s);
+         players[WhichPlayer::kPlayer2] = player2;
+         player2->hide();
+         player2->setParent(mapLayout);
+         player2->show();
+    }
+
+    // Load chosen blocks of the player
+    s >> chosenR >> chosenC;
+    if (chosenR != -1) {
+        players[WhichPlayer::kPlayer1]->chosenBlock =
+                blockMap[chosenR][chosenC];
+    }
+    if (mode == GameMode::kDouble) {
+        s >> chosenR >> chosenC;
+        if (chosenR != -1) {
+            players[WhichPlayer::kPlayer2]->chosenBlock =
+                    blockMap[chosenR][chosenC];
+        }
     }
 
     // Load time.
@@ -1131,17 +1344,24 @@ void GameWindow::prepareSavedGame()
     this->hintFor = static_cast<WhichPlayer>(x);
     s >> this->hintTimeRemaining;
 
-    // Load hint pair.
+    // Load hint paaasair.
+    hintPair.first = hintPair.second = nullptr;
     int r, c;
-    if (!s.atEnd()) {
-        s >> r >> c;
+    s >> r >> c;
+    if (r != -1 && c != -1) {
         hintPair.first = blockMap[r][c];
-        s >> r >> c;
+    }
+    s >> r >> c;
+    if (r != -1 && c != -1) {
         hintPair.second = blockMap[r][c];
     }
 
     // Draw status bar.
     drawStatusBar(mode);
+
+    // Status bar will be above the shading, so raise it again.
+    pauseShading->raise();
+
 
     // Draw map.
     drawMap();
@@ -1151,6 +1371,8 @@ void GameWindow::prepareSavedGame()
     connectPlayerSignals(mode);
 
     status = GameStatus::kPreparedLoad;
+
+
 }
 
 // ============================================================
@@ -1173,7 +1395,6 @@ void GameWindow::keyPressEvent(QKeyEvent *event)
         break;
     }
     case GameStatus::kStopped:
-        emit sendBackToMenu(this);
         break;
     case GameStatus::kUnprepared:
         break;
@@ -1181,11 +1402,11 @@ void GameWindow::keyPressEvent(QKeyEvent *event)
         startGame();
         break;
     case GameStatus::kPreparedLoad:
-        resumeGame();
+        handleResume();
         break;
     case GameStatus::kPaused:
         if (key == kPauseKey) {
-            resumeGame();
+            handleResume();
         } else if (key == kSaveKey) {
             saveToFile();
         }
@@ -1230,7 +1451,7 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
     if (b1 != b2 && b1->content() == b2->content() &&
         checkConnectivity(b1, b2, &path)) {
         // Draw connection for 1 sec.
-        uuid = drawConnection(b1, path);
+        uuid = drawConnection(b1, path, which);
         QTimer::singleShot(kShowConnectionDurationMsec,
                            this, [=](){
             clearConnection(uuid);
@@ -1241,16 +1462,13 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
         b1->eliminateSelf();
         b2->eliminateSelf();
         this->blocksRemaining -= 2;
-        assert(!(this->blocksRemaining & 1) && blocksRemaining >= 0);
+        assert(errornousMap ||
+               !(this->blocksRemaining & 1) && blocksRemaining >= 0);
 
         // Check for game end.
         if (!blocksRemaining) {
             stopGame();
-            if (mode == GameMode::kSingle) {
-                promptSuccess();
-            } else {
-                promptOnePlayerWins();
-            }
+            promptSuccess();
         } else if (!hasNextStep()) {
             stopGame();
             promptStuck();
@@ -1258,7 +1476,7 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
 
         // Check for hint.
         if (hint && ((b1 == hintPair.first || b1 == hintPair.second) ||
-                (b2 == hintPair.first && b2 == hintPair.second))) {
+                (b2 == hintPair.first || b2 == hintPair.second))) {
             generateHint();
         }
 
@@ -1272,7 +1490,7 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
 void GameWindow::handleScoreChanged(const WhichPlayer which,
                                     const int newScore) {
     assert(scoreLbls.contains(which));
-    scoreLbls[which]->setText(getScoreString(newScore));
+    scoreLbls[which]->setText(getScoreString(which, newScore));
 }
 
 void GameWindow::handleCountDown()
@@ -1322,6 +1540,34 @@ void GameWindow::handleKeyPress() {
             movePlayer(which, Direction::kRight);
         }
     }
+}
+
+void GameWindow::handleResume() {
+    pauseShading->hide();
+    resumeGame();
+}
+
+void GameWindow::handleSave() {
+    saveToFile();
+}
+
+void GameWindow::handleLoad() {
+    stopGame();
+    prepareSavedGame();
+}
+
+void GameWindow::handleBack() {
+    if (pauseShading) {
+       pauseShading->hide();
+    }
+    if (gameEndShading != nullptr) {
+        gameEndShading->hide();
+    }
+    if (readyShading) {
+        readyShading->hide();
+    }
+    stopGame();
+    emit sendBackToMenu(this);
 }
 
 void GameWindow::handleStopHint()

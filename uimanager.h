@@ -11,7 +11,7 @@ class UiManager: public QObject {
     Q_OBJECT
 private:
     static const int kWindowWidth = 1200;
-    static const int kWindowHeight = 630;
+    static const int kWindowHeight = 650;
 
     StartWindow startWindow;
     GameWindow gameWindow;

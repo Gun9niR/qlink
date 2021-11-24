@@ -4,10 +4,10 @@ QLinkMap::QLinkMap() {
 
 }
 
-QUuid QLinkMap::addLines(const QList<QLine> &lines)
+QUuid QLinkMap::addLines(const QList<QLine> &lines, const QColor &color)
 {
     QUuid uuid = QUuid::createUuid();
-    this->linesMap.insert(uuid, lines);
+    this->linesMap.insert(uuid, QColoredLineList(color, lines));
     return uuid;
 }
 
@@ -20,8 +20,10 @@ void QLinkMap::removeLines(const QUuid &uuid)
 void QLinkMap::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-    painter.setPen(QPen(Qt::red, 5));
-    for (auto &lines: linesMap) {
-        painter.drawLines(lines);
+    for (auto &coloredLines: linesMap) {
+        QPen pen = QPen(coloredLines.color);
+        pen.setWidth(5);
+        painter.setPen(pen);
+        painter.drawLines(coloredLines.linesList);
     }
 }

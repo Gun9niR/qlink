@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QFile>
+#include <QFontDatabase>
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -24,6 +25,7 @@
 #include <QPair>
 #include <QPushButton>
 #include <QScreen>
+#include <QStatusBar>
 #include <QtTest/QtTest>
 #include <QTimer>
 #include <QThread>
