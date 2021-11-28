@@ -38,7 +38,7 @@ GameWindow::GameWindow(const unique_ptr<UiConfig> &config, QWidget *parent):
     assert(kMapWidth == config->windowWidth());
 
     // Check the number of blocks and block types.
-    assert(kBlockNum < kMaxRows * kMaxCols - 1 - errornousMap);
+    assert(kBlockNum < kMaxRows * kMaxCols - 1);
     assert(kBlocksPerType * kTypeNum == kBlockNum);
     assert(!(kBlocksPerType & 1));
 
@@ -431,14 +431,6 @@ void GameWindow::generateMap()
                     Block::kEmptyBlock;
         blockMap[row][col] = new Block(row, col, false, blockType, blockContent,
                                        WhichPlayer::kNoPlayer, mapLayout);
-    }
-
-    if (errornousMap) {
-        int idx = kMaxRows * kMaxCols - 1;
-        int row = idx / kMaxCols;
-        int col = idx % kMaxCols;
-        blockMap[row][col]->bc = 1;
-        blockMap[row][col]->t = BlockType::kBlock;
     }
 }
 
@@ -1267,7 +1259,7 @@ void GameWindow::prepareNewGame(const GameMode mode)
 
     // Reset time.
     this->timeRemaining = kInitialTime;
-    this->blocksRemaining = kBlockNum + errornousMap;
+    this->blocksRemaining = kBlockNum;
 
     // Draw status bar.
     drawStatusBar(mode);
@@ -1462,8 +1454,7 @@ void GameWindow::handleValidateBlock(const WhichPlayer which,
         b1->eliminateSelf();
         b2->eliminateSelf();
         this->blocksRemaining -= 2;
-        assert(errornousMap ||
-               !(this->blocksRemaining & 1) && blocksRemaining >= 0);
+        assert(!(this->blocksRemaining & 1) && blocksRemaining >= 0);
 
         // Check for game end.
         if (!blocksRemaining) {

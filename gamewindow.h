@@ -42,9 +42,7 @@ private:
     static const int kMaxCols = 30;
 
     // Number of blocks in the map.
-    // static const int kBlockNum = 200;
-    // DEMO: Uncomment next line for quick game end.
-    static const int kBlockNum = 10;
+    static const int kBlockNum = 200;
 
     // Number of blocks each group. Each group has equal number of blocks at the
     // beginning.
@@ -186,9 +184,7 @@ private:
     //
     // ============================================================
 
-    // DEMO: initialize the field to true to generate an errornous map,
-    // with one block that cannot be eliminated.
-    bool errornousMap = true;
+
     // Indicates whether the game is ready to start, started, paused, stopped,
     // stuck, etc.
     GameStatus status;
